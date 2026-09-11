@@ -69,6 +69,11 @@ class AppPreferences(private val context: Context) {
             preferences.edit().putString("selected_dev_stacks", arr.toString()).apply()
         }
 
+    /** Chat agent engine: "claude" (Claude Code CLI) or "generic" (Maya lightweight loop). */
+    var agentEngine: String
+        get() = preferences.getString("agent_engine", "claude") ?: "claude"
+        set(value) { preferences.edit().putString("agent_engine", value).apply() }
+
 
     fun saveProvider(profile: ProviderProfile) {
         preferences.edit()

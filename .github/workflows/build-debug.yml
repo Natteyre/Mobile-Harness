@@ -1,0 +1,40 @@
+name: Build Debug APK (Maya Engine fork)
+
+on:
+  push:
+    branches: [main, master, maya-engine]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK 26.1.10909125
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "ndk;26.1.10909125" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Accept NDK path for Gradle
+        run: echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> $GITHUB_ENV
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk

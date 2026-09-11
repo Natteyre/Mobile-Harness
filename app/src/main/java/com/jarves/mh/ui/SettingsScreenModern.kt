@@ -104,9 +104,10 @@ fun SettingsScreen(
     onDiscoverModels: suspend (ProviderProfile, String) -> ModelDiscoveryResult,
     onValidateProvider: suspend (ProviderProfile, String, List<DiscoveredModel>) -> ConnectionValidation,
     onSetThemeMode: (AppThemeMode) -> Unit,
+    onSetAgentEngine: (String) -> Unit = {},
     onPing: () -> Unit,
     onClearTerminal: () -> Unit,
-    getSavedApiKey: (ProviderKind) -> String,
+    getSavedApiKey: *** -> String,
     onInstallDevStack: (DevStack) -> Unit = {},
     initialDebugUpdateManifestUrl: String = "",
     onSetDebugUpdateManifestUrl: (String) -> Unit = {},
@@ -276,6 +277,32 @@ fun SettingsScreen(
                     expanded = expanded == SettingsSection.CONNECTION,
                     onClick = { toggle(SettingsSection.CONNECTION) },
                 ) {
+                    Text("Agent engine", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)) {
+                        Column {
+                            Row(
+                                Modifier.fillMaxWidth().clickable(enabled = !state.isRunning) { onSetAgentEngine("claude") }.padding(horizontal = 13.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Claude Code", fontWeight = FontWeight.Medium)
+                                    Text("Original CLI engine · best for Claude models", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                }
+                                SelectionDot(state.agentEngine != "generic")
+                            }
+                            HorizontalDivider(Modifier.padding(start = 13.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+                            Row(
+                                Modifier.fillMaxWidth().clickable(enabled = !state.isRunning) { onSetAgentEngine("generic") }.padding(horizontal = 13.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Maya Engine", fontWeight = FontWeight.Medium)
+                                    Text("Lightweight loop · any provider incl. free & local", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                                }
+                                SelectionDot(state.agentEngine == "generic")
+                            }
+                        }
+                    }
                     ConnectionSettings(
                         state = state,
                         selectedKind = selectedKind,

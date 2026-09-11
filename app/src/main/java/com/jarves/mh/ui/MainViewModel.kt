@@ -32,6 +32,8 @@ import com.jarves.mh.network.ConnectionValidation
 import com.jarves.mh.network.ModelDiscoveryResult
 import com.jarves.mh.network.ProviderApiClient
 import com.jarves.mh.runtime.ClaudeRuntimeBridge
+import com.jarves.mh.runtime.GenericAgentBridge
+import com.jarves.mh.runtime.RuntimeBridge
 import com.jarves.mh.runtime.NativeSpawnProcess
 import com.jarves.mh.runtime.RuntimeInstallProgress
 import com.jarves.mh.runtime.RuntimeInstaller
@@ -101,6 +103,7 @@ data class AppUiState(
     val onboardingComplete: Boolean = false,
     val backgroundSetupComplete: Boolean = false,
     val provider: ProviderProfile = ProviderProfile(ProviderKind.ANTHROPIC),
+    val agentEngine: String = "claude",
     val themeMode: com.jarves.mh.ui.theme.AppThemeMode = com.jarves.mh.ui.theme.AppThemeMode.DARK,
     val apiPingStatus: ApiPingStatus = ApiPingStatus.IDLE,
     val apiPingMessage: String? = null,
@@ -159,7 +162,14 @@ data class AppUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val vault = ApiKeyVault(application)
     private val preferences = AppPreferences(application)
-    private val runtime = ClaudeRuntimeBridge(application) { profile -> vault.get(profile.kind.name) }
+    private val claudeBridge = ClaudeRuntimeBridge(application) { profile -> vault.get(profile.kind.name) }
+    private val genericBridge = GenericAgentBridge(application) { profile -> vault.get(profile.kind.name) }
+    private val runtime: RuntimeBridge
+        get() = if (_state.value.agentEngine == "generic") genericBridge else claudeBridge
+    private fun syncProjectRootOnBothBridges(projectId: String, rootPath: String) {
+        claudeBridge.configureProjectRoot(projectId, rootPath)
+        genericBridge.configureProjectRoot(projectId, rootPath)
+    }
     private val installer = RuntimeInstaller(application)
     private val providerApi = ProviderApiClient()
     private fun appUpdater(): AppUpdater = AppUpdater(
@@ -176,6 +186,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             onboardingComplete = preferences.onboardingComplete,
             backgroundSetupComplete = preferences.backgroundSetupComplete,
             provider = preferences.loadProvider(vault),
+            agentEngine = preferences.agentEngine,
             themeMode = runCatching { com.jarves.mh.ui.theme.AppThemeMode.valueOf(preferences.themeMode.uppercase()) }
                 .getOrDefault(com.jarves.mh.ui.theme.AppThemeMode.DARK),
             projects = preferences.loadProjects(),
@@ -760,8 +771,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         viewModelScope.launch { RuntimeSetupController.snapshot.collect(::onSetupSnapshot) }
-        viewModelScope.launch { runtime.events.collect(::onRuntimeEvent) }
+        viewModelScope.launch { claudeBridge.events.collect(::onRuntimeEvent) }
+        viewModelScope.launch { genericBridge.events.collect(::onRuntimeEvent) }
         viewModelScope.launch { bootstrap() }
+    }
+
+    fun setAgentEngine(mode: String) {
+        val normalized = if (mode == "generic") "generic" else "claude"
+        if (_state.value.isRunning) return
+        preferences.agentEngine = normalized
+        _state.update { it.copy(agentEngine = normalized) }
     }
 
     private suspend fun bootstrap() {
@@ -1128,7 +1147,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openProject(project: Project) {
-        runtime.configureProjectRoot(project.id, project.rootPath)
+        syncProjectRootOnBothBridges(project.id, project.rootPath)
         val terminal = loadProjectTerminal(project)
         val suggestedRoot = if (project.rootPath.isBlank()) detectNestedProjectRoot(project) else null
         val chats = preferences.loadProjectChats(project.id).ifEmpty {
@@ -1243,7 +1262,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             language = "TypeScript",
             slug = slug,
         )
-        runtime.configureProjectRoot(project.id, project.rootPath)
+        syncProjectRootOnBothBridges(project.id, project.rootPath)
         val guestRoot = projectGuestRoot(project)
         _state.update {
             it.copy(
@@ -1342,7 +1361,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val root = current.suggestedProjectRoot ?: return
         if (current.isRunning || current.projectTerminalRunning) return
         val updated = project.copy(rootPath = root)
-        runtime.configureProjectRoot(updated.id, updated.rootPath)
+        syncProjectRootOnBothBridges(updated.id, updated.rootPath)
         val projects = current.projects.map { if (it.id == updated.id) updated else it }
         val guestRoot = projectGuestRoot(updated)
         preferences.saveProjects(projects)
@@ -1550,12 +1569,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun isClaudeRuntimeMetadata(relativePath: String): Boolean {
         return relativePath == ".claude" ||
             relativePath == ".claude.json" ||
-            relativePath.startsWith(".claude/")
+            relativePath.startsWith(".claude/") ||
+            relativePath == ".mh" ||
+            relativePath == ".mh/agent-log.md" ||
+            relativePath.startsWith(".mh/")
     }
 
     private fun isExportExcludedPath(relativePath: String): Boolean {
         val excludedNames = setOf(
-            ".git", ".claude", ".gradle", ".idea", ".next", ".cache",
+            ".git", ".claude", ".mh", ".gradle", ".idea", ".next", ".cache",
             "node_modules", ".venv", "venv", "__pycache__", "build",
         )
         return relativePath.split('/').any { it in excludedNames } || isClaudeRuntimeMetadata(relativePath)
