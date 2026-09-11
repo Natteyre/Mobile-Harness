@@ -107,7 +107,7 @@ fun SettingsScreen(
     onSetAgentEngine: (String) -> Unit = {},
     onPing: () -> Unit,
     onClearTerminal: () -> Unit,
-    getSavedApiKey: *** -> String,
+    getSavedApiKey: (ProviderKind) -> String,
     onInstallDevStack: (DevStack) -> Unit = {},
     initialDebugUpdateManifestUrl: String = "",
     onSetDebugUpdateManifestUrl: (String) -> Unit = {},

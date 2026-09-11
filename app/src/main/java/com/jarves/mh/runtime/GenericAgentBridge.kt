@@ -355,7 +355,6 @@ class GenericAgentBridge(
         val tools = openAiTools()
         repeat(MAX_TURNS) { turn ->
             if (userStopRequested) throw IllegalStateException("Stopped by user")
-            if (!coroutineContext.isActive) throw IllegalStateException("Stopped by user")
             val body = JSONObject()
                 .put("model", provider.model.trim())
                 .put("messages", JSONArray(messages))
@@ -455,7 +454,6 @@ class GenericAgentBridge(
         val tools = anthropicTools()
         repeat(MAX_TURNS) {
             if (userStopRequested) throw IllegalStateException("Stopped by user")
-            if (!coroutineContext.isActive) throw IllegalStateException("Stopped by user")
             val body = JSONObject()
                 .put("model", provider.model.trim())
                 .put("max_tokens", 4096)
@@ -673,6 +671,7 @@ class GenericAgentBridge(
             .map { it.relativeTo(workspace).invariantSeparatorsPath }
             .filter { regex.containsMatchIn(it) || regex.matches(it) }
             .sorted()
+            .toList()
     }
 
     private fun globToRegex(glob: String): Regex {
